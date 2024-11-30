@@ -2,7 +2,6 @@ package log
 
 import (
 	"context"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -11,7 +10,7 @@ import (
 
 type LogBasicInfo struct {
 	RequestId string
-	Uid       int64
+	Uid       string
 }
 
 func parseInfoFromContext(ctx context.Context) *LogBasicInfo {
@@ -23,15 +22,12 @@ func parseInfoFromContext(ctx context.Context) *LogBasicInfo {
 			lbi.RequestId = v.(string)
 		}
 		if v, exist := gctx.Get("uid"); exist {
-			lbi.Uid = v.(int64)
+			lbi.Uid = v.(string)
 		}
 	case context.Context:
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
 			lbi.RequestId = md["request_id"][0]
-			uidStr := md["uid"][0]
-			if uidInt, err := strconv.Atoi(uidStr); err == nil {
-				lbi.Uid = int64(uidInt)
-			}
+			lbi.Uid = md["uid"][0]
 		}
 	}
 	return lbi
