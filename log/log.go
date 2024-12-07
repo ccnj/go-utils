@@ -26,8 +26,13 @@ func parseInfoFromContext(ctx context.Context) *LogBasicInfo {
 		}
 	case context.Context:
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
-			lbi.RequestId = md["request_id"][0]
-			lbi.Uid = md["uid"][0]
+			// 安全地获取 metadata 值, 如果直接使用 md["request_id"][0]，万一没有request_id, 会panic
+			if requestIds := md.Get("request_id"); len(requestIds) > 0 {
+				lbi.RequestId = requestIds[0]
+			}
+			if uids := md.Get("uid"); len(uids) > 0 {
+				lbi.Uid = uids[0]
+			}
 		}
 	}
 	return lbi
