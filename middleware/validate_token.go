@@ -63,7 +63,7 @@ func ValidateToken(jwtSigningKey string, skipPathsPrefix []string) gin.HandlerFu
 		authHeader := ctx.GetHeader("Authorization")
 		if authHeader == "" {
 			ctx.JSON(http.StatusUnauthorized, gin.H{
-				"errCode": "401",
+				"errCode": 401,
 				"errMsg":  "尚未登录，请先登录～",
 			})
 			ctx.Abort() // 必须显式地中止。因为gin中，即使没有ctx.Next()，也会在中间件结束时自动执行下一个
@@ -74,7 +74,7 @@ func ValidateToken(jwtSigningKey string, skipPathsPrefix []string) gin.HandlerFu
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 		if token == authHeader {
 			ctx.JSON(http.StatusUnauthorized, gin.H{
-				"errCode": "401",
+				"errCode": 401,
 				"errMsg":  "授权头格式错误",
 			})
 			ctx.Abort()
@@ -92,7 +92,7 @@ func ValidateToken(jwtSigningKey string, skipPathsPrefix []string) gin.HandlerFu
 				errMsg = "身份认证失败，请先登录"
 			}
 			ctx.JSON(http.StatusUnauthorized, gin.H{
-				"errCode": "401",
+				"errCode": 401,
 				"errMsg":  errMsg,
 			})
 			ctx.Abort()
