@@ -1,28 +1,120 @@
 package log
 
 import (
+	"os"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// InitDevLogger 初始化开发环境日志配置
+// 特点：
+// 1. 输出带颜色的日志级别
+// 2. 使用人性化的时间格式
+// 3. 输出调用位置信息
+// 4. 开发环境默认记录 Debug 及以上级别的日志
 func InitDevLogger() {
-	// 使用 zap 的开发配置
+	// 使用 zap 的开发配置，默认记录 Debug 及以上级别
 	config := zap.NewDevelopmentConfig()
 
-	// 修改 EncoderConfig，使日志等级带颜色
-	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder // 彩色日志等级
-	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder        // 可选：人性化的时间格式
+	// 修改 EncoderConfig，使日志更易读
+	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder // 使用大写带颜色的日志级别
+	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder        // ISO8601 格式的时间戳，例如：2024-03-14T15:04:05.000Z
 
 	// 构建 logger
 	logger, _ := config.Build()
 
-	// 设置 caller skip，跳过第一层调用位置。自己的log包封装了一层，所以这里设置跳过一层。
-	// 【注意】 必须使用此包封装的方法打日志。如果直接用zap.S()，跳过一层后，就不是日志位置了
-	logger = logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1)) // 跳过1层
+	// 设置 caller skip，跳过第一层调用位置
+	// 由于我们封装了日志包，需要跳过一层才能显示真实的调用位置
+	// 【重要】必须使用此包封装的方法打日志，如果直接使用 zap.S() 或 zap.L()，由于跳过了一层，将无法显示正确的调用位置
+	logger = logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
 
-	zap.ReplaceGlobals(logger) // 替换全局的logger，既zap.S() zap.L()
+	// 替换全局的 logger，这样可以直接使用 zap.S() 或 zap.L() 打日志
+	zap.ReplaceGlobals(logger)
 }
 
+// InitPrdLogger 初始化生产环境日志配置
+// 特点：
+// 1. 使用 JSON 格式输出，便于日志收集和解析
+// 2. 日志文件自动轮转，避免单个文件过大
+// 3. 错误日志单独收集
+// 4. Info 及以上级别会记录到 app.log
+// 5. Error 及以上级别会记录到 error.log
+// 6. 同时在控制台输出 Info 及以上级别的日志
 func InitPrdLogger() {
+	// 配置 JSON 编码器，定义日志格式
+	encoderConfig := zapcore.EncoderConfig{
+		TimeKey:        "timestamp",     // 时间戳字段名
+		LevelKey:       "level",         // 日志级别字段名
+		NameKey:        "logger",        // logger名字字段名
+		CallerKey:      "caller",        // 调用者字段名
+		FunctionKey:    zapcore.OmitKey, // 调用函数名字段名，这里选择省略
+		MessageKey:     "msg",           // 消息字段名
+		StacktraceKey:  "stacktrace",    // 堆栈跟踪字段名
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.LowercaseLevelEncoder,  // 小写编码器
+		EncodeTime:     zapcore.ISO8601TimeEncoder,     // ISO8601 时间格式
+		EncodeDuration: zapcore.SecondsDurationEncoder, // 持续时间使用秒作为单位
+		EncodeCaller:   zapcore.ShortCallerEncoder,     // 短路径编码器
+	}
 
+	// 配置普通日志文件的轮转规则
+	appLogWriter := &lumberjack.Logger{
+		Filename:   "./logs/app.log", // 日志文件路径
+		MaxSize:    100,              // 单个文件最大尺寸，单位 MB
+		MaxBackups: 60,               // 保留旧文件的最大个数
+		MaxAge:     30,               // 保留旧文件的最大天数
+		Compress:   true,             // 是否压缩/归档旧文件
+	}
+
+	// 配置错误日志文件的轮转规则
+	errorLogWriter := &lumberjack.Logger{
+		Filename:   "./logs/error.log", // 错误日志文件路径
+		MaxSize:    100,                // 单个文件最大尺寸，单位 MB
+		MaxBackups: 60,                 // 保留旧文件的最大个数
+		MaxAge:     30,                 // 保留旧文件的最大天数
+		Compress:   true,               // 是否压缩/归档旧文件
+	}
+
+	// 配置日志级别过滤器
+	highPriority := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+		return lvl >= zapcore.ErrorLevel // Error 及以上级别
+	})
+	lowPriority := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+		return lvl >= zapcore.InfoLevel && lvl < zapcore.ErrorLevel // Info 到 Warn 级别
+	})
+
+	// 配置多个输出核心
+	// 使用 NewTee 将日志输出到多个位置
+	core := zapcore.NewTee(
+		// 1. Info 到 Warn 级别的日志写入 app.log
+		zapcore.NewCore(
+			zapcore.NewJSONEncoder(encoderConfig),
+			zapcore.AddSync(appLogWriter),
+			lowPriority,
+		),
+		// 2. Error 及以上级别的日志写入 error.log
+		zapcore.NewCore(
+			zapcore.NewJSONEncoder(encoderConfig),
+			zapcore.AddSync(errorLogWriter),
+			highPriority,
+		),
+		// 3. Info 及以上级别的日志同时输出到控制台
+		zapcore.NewCore(
+			zapcore.NewJSONEncoder(encoderConfig),
+			zapcore.AddSync(os.Stdout),
+			lowPriority,
+		),
+	)
+
+	// 构建最终的 logger
+	logger := zap.New(core,
+		zap.AddCaller(),                   // 添加调用者信息
+		zap.AddCallerSkip(1),              // 跳过一层调用栈，显示实际的调用位置
+		zap.AddStacktrace(zap.ErrorLevel), // Error 及以上级别显示堆栈信息
+	)
+
+	// 替换全局的 logger
+	zap.ReplaceGlobals(logger)
 }
