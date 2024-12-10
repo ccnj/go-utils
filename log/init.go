@@ -2,6 +2,8 @@ package log
 
 import (
 	"os"
+	"path/filepath"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -19,8 +21,10 @@ func InitDevLogger() {
 	config := zap.NewDevelopmentConfig()
 
 	// 修改 EncoderConfig，使日志更易读
-	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder // 使用大写带颜色的日志级别
-	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder        // ISO8601 格式的时间戳，例如：2024-03-14T15:04:05.000Z
+	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder                      // 使用大写带颜色的日志级别
+	config.EncoderConfig.EncodeTime = func(t time.Time, enc zapcore.PrimitiveArrayEncoder) { // 东八区时间格式 毫秒级
+		enc.AppendString(t.In(time.FixedZone("CST", 8*3600)).Format("2006-01-02T15:04:05.000+08:00"))
+	}
 
 	// 构建 logger
 	logger, _ := config.Build()
@@ -43,38 +47,56 @@ func InitDevLogger() {
 // 5. Error 及以上级别会记录到 error.log
 // 6. 同时在控制台输出 Info 及以上级别的日志
 func InitPrdLogger() {
+	// 确保日志路径存在
+	logDir := "../logs"
+	allProjectLogDir := "/usr/local/yeying/unilogs"
+	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
+		panic("Failed to create log directory: " + err.Error())
+	}
+
 	// 配置 JSON 编码器，定义日志格式
 	encoderConfig := zapcore.EncoderConfig{
-		TimeKey:        "timestamp",     // 时间戳字段名
-		LevelKey:       "level",         // 日志级别字段名
-		NameKey:        "logger",        // logger名字字段名
-		CallerKey:      "caller",        // 调用者字段名
-		FunctionKey:    zapcore.OmitKey, // 调用函数名字段名，这里选择省略
-		MessageKey:     "msg",           // 消息字段名
-		StacktraceKey:  "stacktrace",    // 堆栈跟踪字段名
-		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.LowercaseLevelEncoder,  // 小写编码器
-		EncodeTime:     zapcore.ISO8601TimeEncoder,     // ISO8601 时间格式
+		TimeKey:       "timestamp",     // 时间戳字段名
+		LevelKey:      "level",         // 日志级别字段名
+		NameKey:       "logger",        // logger名字字段名
+		CallerKey:     "caller",        // 调用者字段名
+		FunctionKey:   zapcore.OmitKey, // 调用函数名字段名，这里选择省略
+		MessageKey:    "msg",           // 消息字段名
+		StacktraceKey: "stacktrace",    // 堆栈跟踪字段名
+		LineEnding:    zapcore.DefaultLineEnding,
+		EncodeLevel:   zapcore.LowercaseLevelEncoder, // 小写编码器
+		EncodeTime: func(t time.Time, enc zapcore.PrimitiveArrayEncoder) { // 东八区时间格式 毫秒级
+			enc.AppendString(t.In(time.FixedZone("CST", 8*3600)).Format("2006-01-02T15:04:05.000+08:00"))
+		},
 		EncodeDuration: zapcore.SecondsDurationEncoder, // 持续时间使用秒作为单位
 		EncodeCaller:   zapcore.ShortCallerEncoder,     // 短路径编码器
 	}
 
-	// 配置普通日志文件的轮转规则
+	// 配置普通日志文件的轮转规则 -- 记录在当前项目下
 	appLogWriter := &lumberjack.Logger{
-		Filename:   "./logs/app.log", // 日志文件路径
-		MaxSize:    100,              // 单个文件最大尺寸，单位 MB
-		MaxBackups: 60,               // 保留旧文件的最大个数
-		MaxAge:     30,               // 保留旧文件的最大天数
-		Compress:   true,             // 是否压缩/归档旧文件
+		Filename:   filepath.Join(logDir, "app.log"), // 日志文件路径
+		MaxSize:    100,                              // 单个文件最大尺寸，单位 MB
+		MaxBackups: 60,                               // 保留旧文件的最大个数
+		MaxAge:     30,                               // 保留旧文件的最大天数
+		Compress:   true,                             // 是否压缩/归档旧文件
 	}
 
-	// 配置错误日志文件的轮转规则
+	// 配置错误日志文件的轮转规则 -- 记录在当前项目下
 	errorLogWriter := &lumberjack.Logger{
-		Filename:   "./logs/error.log", // 错误日志文件路径
-		MaxSize:    100,                // 单个文件最大尺寸，单位 MB
-		MaxBackups: 60,                 // 保留旧文件的最大个数
-		MaxAge:     30,                 // 保留旧文件的最大天数
-		Compress:   true,               // 是否压缩/归档旧文件
+		Filename:   filepath.Join(logDir, "error.log"), // 错误日志文件路径
+		MaxSize:    100,                                // 单个文件最大尺寸，单位 MB
+		MaxBackups: 120,                                // 保留旧文件的最大个数
+		MaxAge:     60,                                 // 保留旧文件的最大天数
+		Compress:   true,                               // 是否压缩/归档旧文件
+	}
+
+	// 配置所有日志文件的轮转规则 -- 所有项目的所有日志都写入到 all.log，方便临时分析问题
+	allLogWriter := &lumberjack.Logger{
+		Filename:   filepath.Join(allProjectLogDir, "all.log"), // 所有日志文件路径
+		MaxSize:    300,                                        // 单个文件最大尺寸，单位 MB
+		MaxBackups: 10,                                         // 保留旧文件的最大个数
+		MaxAge:     3,                                          // 保留旧文件的最大天数
+		Compress:   true,                                       // 是否压缩/归档旧文件
 	}
 
 	// 配置日志级别过滤器
@@ -105,6 +127,12 @@ func InitPrdLogger() {
 			zapcore.NewJSONEncoder(encoderConfig),
 			zapcore.AddSync(os.Stdout),
 			lowPriority,
+		),
+		// 4. 所有级别的日志写入 all.log
+		zapcore.NewCore(
+			zapcore.NewJSONEncoder(encoderConfig),
+			zapcore.AddSync(allLogWriter),
+			zap.LevelEnablerFunc(func(lvl zapcore.Level) bool { return true }), // 记录所有级别的日志
 		),
 	)
 
