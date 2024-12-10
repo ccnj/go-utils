@@ -11,9 +11,11 @@
 - 记录 Debug 及以上级别的日志
 - 显示精确的调用位置信息
 - 使用东八区时间格式（毫秒级）
+- 自动添加环境标识前缀（projectName, 如 user_srv）
 
 #### 生产环境 (InitPrdLogger)
 - JSON 格式输出，便于日志收集和解析
+- 自动添加应用标识前缀（projectName, 如 user_srv）
 - 多级日志分流：
   - `app.log`: 记录 Info 到 Warn 级别的日志
   - `error.log`: 记录 Error 及以上级别的日志

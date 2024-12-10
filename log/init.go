@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -11,14 +12,20 @@ import (
 )
 
 // InitDevLogger 初始化开发环境日志配置
+// 入参：projectName 项目名称，如 user_srv
 // 特点：
 // 1. 输出带颜色的日志级别
 // 2. 使用人性化的时间格式
 // 3. 输出调用位置信息
 // 4. 开发环境默认记录 Debug 及以上级别的日志
-func InitDevLogger() {
+func InitDevLogger(projectName string) {
 	// 使用 zap 的开发配置，默认记录 Debug 及以上级别
 	config := zap.NewDevelopmentConfig()
+
+	// 添加固定前缀字段
+	config.InitialFields = map[string]interface{}{
+		"project": projectName, // 应用名称
+	}
 
 	// 修改 EncoderConfig，使日志更易读
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder                      // 使用大写带颜色的日志级别
@@ -39,6 +46,7 @@ func InitDevLogger() {
 }
 
 // InitPrdLogger 初始化生产环境日志配置
+// 入参：projectName 项目名称，如 user_srv
 // 特点：
 // 1. 使用 JSON 格式输出，便于日志收集和解析
 // 2. 日志文件自动轮转，避免单个文件过大
@@ -46,7 +54,7 @@ func InitDevLogger() {
 // 4. Info 及以上级别会记录到 app.log
 // 5. Error 及以上级别会记录到 error.log
 // 6. 同时在控制台输出 Info 及以上级别的日志
-func InitPrdLogger() {
+func InitPrdLogger(projectName string) {
 	// 确保日志路径存在
 	logDir := "../logs"
 	allProjectLogDir := "/usr/local/yeying/unilogs"
@@ -74,20 +82,20 @@ func InitPrdLogger() {
 
 	// 配置普通日志文件的轮转规则 -- 记录在当前项目下
 	appLogWriter := &lumberjack.Logger{
-		Filename:   filepath.Join(logDir, "app.log"), // 日志文件路径
-		MaxSize:    100,                              // 单个文件最大尺寸，单位 MB
-		MaxBackups: 60,                               // 保留旧文件的最大个数
-		MaxAge:     30,                               // 保留旧文件的最大天数
-		Compress:   true,                             // 是否压缩/归档旧文件
+		Filename:   filepath.Join(logDir, fmt.Sprintf("%s.log", projectName)), // 日志文件路径
+		MaxSize:    100,                                                       // 单个文件最大尺寸，单位 MB
+		MaxBackups: 60,                                                        // 保留旧文件的最大个数
+		MaxAge:     30,                                                        // 保留旧文件的最大天数
+		Compress:   true,                                                      // 是否压缩/归档旧文件
 	}
 
 	// 配置错误日志文件的轮转规则 -- 记录在当前项目下
 	errorLogWriter := &lumberjack.Logger{
-		Filename:   filepath.Join(logDir, "error.log"), // 错误日志文件路径
-		MaxSize:    100,                                // 单个文件最大尺寸，单位 MB
-		MaxBackups: 120,                                // 保留旧文件的最大个数
-		MaxAge:     60,                                 // 保留旧文件的最大天数
-		Compress:   true,                               // 是否压缩/归档旧文件
+		Filename:   filepath.Join(logDir, fmt.Sprintf("err_%s.log", projectName)), // 错误日志文件路径
+		MaxSize:    100,                                                           // 单个文件最大尺寸，单位 MB
+		MaxBackups: 120,                                                           // 保留旧文件的最大个数
+		MaxAge:     60,                                                            // 保留旧文件的最大天数
+		Compress:   true,                                                          // 是否压缩/归档旧文件
 	}
 
 	// 配置所有日志文件的轮转规则 -- 所有项目的所有日志都写入到 all.log，方便临时分析问题
@@ -141,6 +149,10 @@ func InitPrdLogger() {
 		zap.AddCaller(),                   // 添加调用者信息
 		zap.AddCallerSkip(1),              // 跳过一层调用栈，显示实际的调用位置
 		zap.AddStacktrace(zap.ErrorLevel), // Error 及以上级别显示堆栈信息
+		// 添加固定前缀字段
+		zap.Fields(
+			zap.String("project", projectName), // 应用名称
+		),
 	)
 
 	// 替换全局的 logger
