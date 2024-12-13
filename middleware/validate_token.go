@@ -13,7 +13,8 @@ import (
 )
 
 type myCustomClaims struct {
-	UID string `json:"uid"`
+	UID  string `json:"uid"`
+	Role int32  `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -101,7 +102,7 @@ func ValidateToken(jwtSigningKey string, skipPathsPrefix []string) gin.HandlerFu
 
 		// 保存uid至ctx中
 		ctx.Set("uid", claims.UID)
-
+		ctx.Set("role", int64(claims.Role)) // ctx无getInt32方法，所以存int64，取的时候也必须ctx.GetInt64("role") GetInt取不到
 		// 执行后续中间件
 		// ctx.Next()
 
