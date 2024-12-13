@@ -56,7 +56,7 @@ func InitDevLogger(projectName string) {
 // 6. 同时在控制台输出 Info 及以上级别的日志
 func InitPrdLogger(projectName string) {
 	// 确保日志路径存在
-	logDir := "../logs"
+	logDir := fmt.Sprintf("/usr/local/yeying/projects/%s/logs", projectName) // 临时路径老有问题，没深究
 	allProjectLogDir := "/usr/local/yeying/unilogs"
 	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
 		panic("Failed to create log directory: " + err.Error())
