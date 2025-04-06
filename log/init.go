@@ -54,10 +54,19 @@ func InitDevLogger(projectName string) {
 // 4. Info 及以上级别会记录到 app.log
 // 5. Error 及以上级别会记录到 error.log
 // 6. 同时在控制台输出 Info 及以上级别的日志
-func InitPrdLogger(projectName string) {
+func InitPrdLogger(projectName string, config ...*PrdLoggerConfig) {
 	// 确保日志路径存在
 	logDir := fmt.Sprintf("/usr/local/yeying/projects/%s/logs", projectName) // 临时路径老有问题，没深究
 	allProjectLogDir := "/usr/local/yeying/unilogs"
+	if len(config) > 0 {
+		// 如果传入了配置，则使用传入的配置
+		if config[0].LogDir != "" {
+			logDir = config[0].LogDir
+		}
+		if config[0].AllProjectLogDir != "" {
+			allProjectLogDir = config[0].AllProjectLogDir
+		}
+	}
 	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
 		panic("Failed to create log directory: " + err.Error())
 	}
@@ -157,4 +166,9 @@ func InitPrdLogger(projectName string) {
 
 	// 替换全局的 logger
 	zap.ReplaceGlobals(logger)
+}
+
+type PrdLoggerConfig struct {
+	LogDir           string
+	AllProjectLogDir string
 }
