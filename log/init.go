@@ -117,10 +117,10 @@ func InitPrdLogger(projectName string, config ...*PrdLoggerConfig) {
 	}
 
 	// 配置日志级别过滤器
-	highPriority := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+	highLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 		return lvl >= zapcore.ErrorLevel // Error 及以上级别
 	})
-	lowPriority := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+	lowLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 		return lvl >= zapcore.InfoLevel && lvl < zapcore.ErrorLevel // Info 到 Warn 级别
 	})
 
@@ -131,19 +131,19 @@ func InitPrdLogger(projectName string, config ...*PrdLoggerConfig) {
 		zapcore.NewCore(
 			zapcore.NewJSONEncoder(encoderConfig),
 			zapcore.AddSync(appLogWriter),
-			lowPriority,
+			lowLevel,
 		),
 		// 2. Error 及以上级别的日志写入 error.log
 		zapcore.NewCore(
 			zapcore.NewJSONEncoder(encoderConfig),
 			zapcore.AddSync(errorLogWriter),
-			highPriority,
+			highLevel,
 		),
-		// 3. Info 及以上级别的日志同时输出到控制台
+		// 3. 所有级别的日志同时输出到控制台
 		zapcore.NewCore(
 			zapcore.NewJSONEncoder(encoderConfig),
 			zapcore.AddSync(os.Stdout),
-			lowPriority,
+			zap.LevelEnablerFunc(func(lvl zapcore.Level) bool { return true }), // 记录所有级别的日志
 		),
 		// 4. 所有级别的日志写入 all.log
 		zapcore.NewCore(
